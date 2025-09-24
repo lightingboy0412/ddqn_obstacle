@@ -62,28 +62,6 @@ class MazeEnv:
                 return True
         return False
 
-    def is_in_danger_zone(self, x, y, margin=10):
-        # 靠近牆壁
-        if x < margin or x > self.map_size - margin:
-            return True
-        if y < margin or y > self.map_size - margin:
-            return True
-        # 靠近障礙物
-        for (xmin, xmax, ymin, ymax) in self.obstacles:
-            dx = max(xmin - x, 0, x - xmax)
-            dy = max(ymin - y, 0, y - ymax)
-            if np.hypot(dx, dy) < margin:
-                return True
-        return False
-
-    def dist_to_obstacles(self, x, y):
-        dists = []
-        for (xmin, xmax, ymin, ymax) in self.obstacles:
-            dx = max(xmin - x, 0, x - xmax)
-            dy = max(ymin - y, 0, y - ymax)
-            dists.append(np.hypot(dx, dy))
-        return min(dists) if dists else float("inf")
-
     def reached_goal(self):
         return np.hypot(self.x - self.goal[0], self.y - self.goal[1]) < self.distance_threshold
 
@@ -93,57 +71,49 @@ class MazeEnv:
         self.angle = (self.angle + delta_angle + 180) % 360 - 180
         rad = np.radians(self.angle)
 
-        prev_x, prev_y = self.x, self.y
-        prev_danger = self.is_in_danger_zone(prev_x, prev_y)
-        prev_dist_obs = self.dist_to_obstacles(prev_x, prev_y)
-
-        # 移動
+        # 嘗試移動
         new_x = self.x + self.step_distance * np.cos(rad)
         new_y = self.y + self.step_distance * np.sin(rad)
+
+        # 邊界檢查
+        hit_wall = (
+            new_x <= 0 or new_x >= self.map_size or
+            new_y <= 0 or new_y >= self.map_size
+        )
         new_x = np.clip(new_x, 0, self.map_size)
         new_y = np.clip(new_y, 0, self.map_size)
 
+        # 障礙檢查
         hit_obstacle = self.is_in_obstacle(new_x, new_y)
-        if not hit_obstacle:
+
+        # 狀態更新（只有沒撞到才移動）
+        if not (hit_obstacle or hit_wall):
             self.x, self.y = new_x, new_y
 
         self.steps += 1
-        done = self.steps >= self.max_steps or self.reached_goal()
+
+        # --- done 條件 ---
+        done = (
+            self.steps >= self.max_steps or
+            self.reached_goal() or
+            hit_obstacle or
+            hit_wall
+        )
 
         # --- reward system ---
         if self.reached_goal():
-            reward = 100.0
-        elif hit_obstacle:
-            reward = -50.0
+            reward = 10.0
+        elif hit_obstacle or hit_wall:
+            reward = -1.0
         else:
-            new_danger = self.is_in_danger_zone(self.x, self.y)
-            new_dist_obs = self.dist_to_obstacles(self.x, self.y)
-
-            moving_away = new_dist_obs > prev_dist_obs
-            moving_closer = new_dist_obs < prev_dist_obs
-
-            if prev_danger == 0 and new_danger == 1:      # S -> U
-                reward = -2.0
-            elif prev_danger == 1 and new_danger == 1:    # U -> U
-                if moving_closer:  # CO
-                    reward = -2.0
-                else:              # AO
-                    reward = -1.0
-            elif prev_danger == 0 and new_danger == 0:    # S -> S
-                if moving_closer:  # CG
-                    reward = +1.0
-                else:              # AG
-                    reward = 0.0
-            elif prev_danger == 1 and new_danger == 0:    # U -> S
-                reward = +2.0
-            else:
-                reward = -0.01  # fallback
+            reward = -0.1
 
         return self._get_state(), reward, done, {}
 
+
     # --- API ---
     def state_space(self):
-        return 4  # (x, y, beta, danger)
+        return 3  
 
     def action_space(self):
         return 5

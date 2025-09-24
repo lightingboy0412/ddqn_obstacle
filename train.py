@@ -6,7 +6,7 @@ from model import QNetwork, ReplayBuffer
 from env import MazeEnv   
 
 def train(env=None,
-          episodes=10000,
+          episodes=1000,
           batch_size=64,
           gamma=0.99,
           lr=1e-3,

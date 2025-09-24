@@ -1,1 +1,1 @@
-enter 'train' or 'test'")
+    if mode == "train":
