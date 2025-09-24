@@ -62,6 +62,11 @@ class MazeEnv:
                 return True
         return False
 
+    def is_hit_wall(self, x, y):
+        if x <= 0 or x >= self.map_size or y <= 0 or y >= self.map_size:
+            return True
+        return False
+    
     def reached_goal(self):
         return np.hypot(self.x - self.goal[0], self.y - self.goal[1]) < self.distance_threshold
 
@@ -71,34 +76,19 @@ class MazeEnv:
         self.angle = (self.angle + delta_angle + 180) % 360 - 180
         rad = np.radians(self.angle)
 
-        # 嘗試移動
+        # 移動
         new_x = self.x + self.step_distance * np.cos(rad)
         new_y = self.y + self.step_distance * np.sin(rad)
-
-        # 邊界檢查
-        hit_wall = (
-            new_x <= 0 or new_x >= self.map_size or
-            new_y <= 0 or new_y >= self.map_size
-        )
         new_x = np.clip(new_x, 0, self.map_size)
         new_y = np.clip(new_y, 0, self.map_size)
 
-        # 障礙檢查
         hit_obstacle = self.is_in_obstacle(new_x, new_y)
-
-        # 狀態更新（只有沒撞到才移動）
-        if not (hit_obstacle or hit_wall):
+        hit_wall = self.is_hit_wall(new_x, new_y)
+        if not hit_obstacle and not hit_wall:
             self.x, self.y = new_x, new_y
 
         self.steps += 1
-
-        # --- done 條件 ---
-        done = (
-            self.steps >= self.max_steps or
-            self.reached_goal() or
-            hit_obstacle or
-            hit_wall
-        )
+        done = self.steps >= self.max_steps or self.reached_goal()
 
         # --- reward system ---
         if self.reached_goal():
@@ -106,10 +96,10 @@ class MazeEnv:
         elif hit_obstacle or hit_wall:
             reward = -1.0
         else:
-            reward = -0.1
+            reward = -0.01
+
 
         return self._get_state(), reward, done, {}
-
 
     # --- API ---
     def state_space(self):
